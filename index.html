@@ -21,7 +21,10 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 #ov{position:absolute;inset:0;width:100%;height:100%;touch-action:manipulation}
 .top{position:absolute;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
 .chip{background:rgba(6,26,31,.78);border-radius:999px;padding:7px 12px;font-size:14px;font-weight:600}
-.chip.warn{background:rgba(255,106,19,.92);color:#1a0a00}
+.chip.ok{background:rgba(46,160,90,.92);color:#04210f}
+.zb{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.btn.no{background:#3a3f44;border-color:#3a3f44}
+.btn.yes{background:#2ea05a;border-color:#2ea05a;color:#04210f}
 .dock{position:absolute;left:0;right:0;bottom:0;padding:12px 14px calc(env(safe-area-inset-bottom) + 12px);background:linear-gradient(transparent,rgba(0,0,0,.75) 30%);display:grid;gap:10px}
 .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:10px}
 .btn{min-height:54px;border-radius:14px;border:2px solid rgba(255,255,255,.7);background:rgba(6,26,31,.6);color:#fff;font:700 17px/1.2 -apple-system,system-ui,sans-serif;cursor:pointer;padding:8px 12px}
@@ -48,9 +51,9 @@ h1{font:800 clamp(32px,9vw,46px)/1.05 -apple-system,system-ui,sans-serif;margin:
 <div id="stage">
 <video id="v" playsinline muted autoplay></video>
 <canvas id="ov" aria-label="Live camera with possible shark teeth circled. Tap to freeze and zoom."></canvas>
-<div class="top"><span class="chip" id="st">Starting…</span><span class="chip warn" id="busy" hidden>Speckled sand: expect extra rings</span></div>
+<div class="top"><span class="chip" id="st">Starting…</span><span class="chip ok" id="fd" hidden></span></div>
 <div class="dock">
-<div class="row"><button class="btn main" id="frz" type="button">Freeze</button><button class="btn" id="save" type="button" hidden>Save photo</button><button class="btn" id="bp" type="button" aria-pressed="false">Beep off</button><button class="btn" id="so" type="button" aria-pressed="false">Best only</button></div>
+<div class="row"><button class="btn main" id="frz" type="button">Freeze</button><button class="btn" id="save" type="button" hidden>Save photo</button><button class="btn" id="bp" type="button" aria-pressed="false">Beep off</button></div>
 <div class="sl" id="zoomRow" hidden><span>Zoom</span><input id="zm" type="range" min="1" max="2" step=".1" value="1" aria-label="Camera zoom"><button class="btn" id="torch" type="button" hidden aria-pressed="false">Light</button></div>
 <div class="sl"><span>Fewer</span><input id="sens" type="range" min="1" max="10" value="5" aria-label="How many rings to show"><span>More</span></div>
 </div>
@@ -64,14 +67,14 @@ h1{font:800 clamp(32px,9vw,46px)/1.05 -apple-system,system-ui,sans-serif;margin:
 <circle cx="150" cy="85" r="52" fill="none" stroke="#fff" stroke-width="8"/><circle cx="150" cy="85" r="52" fill="none" stroke="#ff6a13" stroke-width="5"/>
 </svg>
 <h1>Shark Tooth Finder Live</h1>
-<p>Point your camera at the sand and walk slowly. Orange rings settle on dark, solid spots that stay put. They're the phone's guesses: it catches some teeth but also rings shadows and gaps. Thick rings are its best guesses.</p>
-<p>Too many rings? Tap Best only. Hold the phone 2–3 feet up, sun behind you. Tap the screen or a ring to freeze and zoom. For a real answer, tap Save photo and run it through the Claude check in the Shark Tooth Finder in Claude.</p>
+<p>Point your camera at the sand and walk slowly. Rings only go on the 3 most tooth-like dark spots in view, and only once they've held still for a moment. Black pebbles are the same fossil stone as teeth, so some rings will still be pebbles. Look for the triangle shape and the shine.</p>
+<p>Tap a ring to freeze and zoom in. Tap Not a tooth and the ring moves to the next best spot. Tap It's a tooth! to count your finds. Want more or fewer rings? Use the Fewer–More slider. Hold the phone 2–3 feet up, sun behind you. For a real answer, tap Save photo and run it through the Claude check in the Shark Tooth Finder in Claude.</p>
 <button class="btn main" id="go" type="button" style="width:100%">Start camera</button>
 <p id="err" role="alert"></p>
 </div></div>
 
 <div id="zoom" class="ov2" hidden role="dialog" aria-modal="true" aria-label="Zoomed spot">
-<div class="zbox"><canvas id="zc" width="720" height="720"></canvas><p id="zl"></p><button class="btn" id="zx" type="button" style="width:100%">Close</button></div>
+<div class="zbox"><canvas id="zc" width="720" height="720"></canvas><p id="zl"></p><div class="zb" id="zbtns"><button class="btn no" id="zno" type="button">Not a tooth</button><button class="btn yes" id="zyes" type="button">It's a tooth!</button></div><button class="btn" id="zx" type="button" style="width:100%">Close</button></div>
 </div>
 <div id="saved" class="ov2" hidden role="dialog" aria-modal="true" aria-label="Save this photo">
 <div class="zbox"><img id="svimg" alt="The frozen camera frame"><p id="svl">Press and hold the photo, then tap Save to Photos. Open it in the Shark Tooth Finder in Claude with Pick from photos for a Claude check.</p><button class="btn" id="svx" type="button" style="width:100%">Close</button></div>
@@ -136,10 +139,10 @@ function bgField(getTile,W,H,R){
   for(let y=0;y<bh;y++){const y0=Math.max(0,y-rb),y1=Math.min(bh,y+rb+1);for(let x=0;x<bw;x++){const x0=Math.max(0,x-rb),x1=Math.min(bw,x+rb+1),c=at(IN,x0,y0,x1,y1)||1,m=at(IL,x0,y0,x1,y1)/c,v=at(IL2,x0,y0,x1,y1)/c-m*m,k=y*bw+x;L[k]=m;S[k]=v>0?Math.sqrt(v):0;C[k]=at(IC,x0,y0,x1,y1)/c}}
   return {f,bw,bh,L,S,C};
 }
-function scanOpts(W,H,sens,tm){const LONG=Math.max(W,H);return {R:Math.round(LONG/14),tS:Math.max(5,tm*(.28+sens*.03)),gMin:18,cMin:14,minA:Math.max(3,Math.round((LONG/700)**2)),aRef:Math.max(1,(LONG/2000)**2),aCap:1e12,maxA:Math.round((LONG/15)**2)}}
+function scanOpts(W,H,sens,tm){const LONG=Math.max(W,H);return {R:Math.round(LONG/14),tS:Math.max(5,tm*(.28+sens*.03)),gMin:18,cMin:14,minA:Math.max(3,Math.round((LONG/700)**2)),aRef:Math.max(1,(LONG/2000)**2),aCap:Math.round((LONG/15)**2),maxA:Math.round((LONG/9)**2)}}
 function pick(all,W,H,sens){
   const LONG=Math.max(W,H),eb=Math.round(LONG*.035),keep=all.filter(c=>c.x>eb&&c.y>eb&&c.x<W-eb&&c.y<H-eb).sort((a,b)=>b.s-a.s);
-  const T=2.6-sens*.16,cap=[2,3,4,5,6,8,10,13,16,20][sens-1]||6,out=[];
+  const T=2.6-sens*.16,cap=([1,1,2,2,3,4,5,6,8,10][sens-1]||3)+5,out=[];
   for(const c of keep){
     if(out.length>=cap||c.s<T)break;
     if(out.some(p=>Math.hypot(p.x-c.x,p.y-c.y)<Math.max(p.w,p.h,c.w,c.h)*2))continue;
@@ -249,17 +252,17 @@ function loop(){
 function onResult(r){
   pending=false;
   if(frozen){
-    if(r.id===freezeId){tracks=r.spots.map(p=>({id:nextId++,x:p.x,y:p.y,w:p.w,h:p.h,hits:4,miss:0,sc:p.sc,strong:p.strong,seen:true,beeped:true}));st.textContent=`Frozen · ${tracks.length} ring${tracks.length===1?'':'s'} · tap one to zoom`}
+    if(r.id===freezeId){tracks=r.spots.map(p=>({id:nextId++,x:p.x,y:p.y,w:p.w,h:p.h,hits:4,miss:0,sc:p.sc,strong:p.strong,seen:true,beeped:true,skip:nearMark(p,'skip'),found:nearMark(p,'found')}));frozenStatus()}
     else if(wantFreezeScan){wantFreezeScan=false;freezeScan()}
     return;
   }
   frames++;
   const now=performance.now();if(now-lastRate>1000){rate=frames*1000/(now-lastRate);frames=0;lastRate=now}
   tm=r.tm||tm;
-  $('busy').hidden=!(tm>22);
+  
   track(r.spots);
   const ns=tracks.filter(t=>t.strong&&t.hits>=2).length;
-  st.textContent=`Live · ${rate?rate.toFixed(1):'…'} scans/s`;
+  st.textContent=`Live · best ${capN()} guess${capN()===1?'':'es'}`;
   setTimeout(loop,0);
 }
 
@@ -271,15 +274,17 @@ function track(list){
     for(const t of tracks){if(t.seen)continue;const d=Math.hypot((t.x-p.x)*fc.width,(t.y-p.y)*fc.height);if(d<bd){bd=d;best=t}}
     const lim=Math.max(.03*L,Math.max(p.w*fc.width,p.h*fc.height)*3);
     if(best&&bd<lim){best.x+=(p.x-best.x)*.6;best.y+=(p.y-best.y)*.6;best.w=p.w;best.h=p.h;best.hits++;best.miss=0;best.sc=Math.max(best.sc*.8,p.sc);best.strong=best.strong||p.strong&&best.hits>=3;best.seen=true}
-    else tracks.push({id:nextId++,x:p.x,y:p.y,w:p.w,h:p.h,hits:1,miss:0,sc:p.sc,strong:false,seen:true,beeped:false});
+    else tracks.push({id:nextId++,x:p.x,y:p.y,w:p.w,h:p.h,hits:1,miss:0,sc:p.sc,strong:false,seen:true,beeped:false,skip:nearMark(p,'skip'),found:nearMark(p,'found')});
   }
   for(const t of tracks)if(!t.seen)t.miss++;
   tracks=tracks.filter(t=>t.miss<=2).slice(-60);
-  for(const t of tracks)if(t.strong&&t.hits>=3&&!t.beeped){t.beeped=true;ping()}
+  for(const t of shown())if(t.strong&&!t.beeped){t.beeped=true;ping()}
 }
 
+let lastPing=0;
 function ping(){
   if(!beep||!actx)return;
+  const now=performance.now();if(now-lastPing<1500)return;lastPing=now;
   try{const o=actx.createOscillator(),g=actx.createGain(),t=actx.currentTime;o.frequency.value=1046;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.35,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+.18);o.connect(g).connect(actx.destination);o.start(t);o.stop(t+.2)}catch(e){}
 }
 
@@ -288,20 +293,26 @@ function resize(){dpr=Math.min(3,window.devicePixelRatio||1);SW=innerWidth;SH=in
 addEventListener('resize',resize);
 function map(){const fw=fc.width||1,fh=fc.height||1,s=Math.max(SW/fw,SH/fh);return{s,dx:(SW-fw*s)/2,dy:(SH-fh*s)/2,fw,fh}}
 
-function shown(){return tracks.filter(t=>t.hits>=2&&(!strongOnly||t.strong))}
+function capN(){return[1,1,2,2,3,4,5,6,8,10][(+sens.value||5)-1]||3}
+let dockTop=1e9;
+function onScreen(t,m){const X=m.dx+t.x*m.fw*m.s,Y=m.dy+t.y*m.fh*m.s;return X>10&&X<SW-10&&Y>10&&Y<Math.min(SH,dockTop)-10}
+function shown(){const m=map();const l=tracks.filter(t=>!t.skip&&!t.found&&t.hits>=(frozen?1:3)&&(!strongOnly||t.strong)&&onScreen(t,m)).sort((a,b)=>b.sc*(b.on?1.2:1)-a.sc*(a.on?1.2:1)).slice(0,capN());for(const t of tracks)t.on=false;for(const t of l)t.on=true;return l}
 function paint(){
   if(!running){painting=false;return}
   og.setTransform(dpr,0,0,dpr,0,0);og.clearRect(0,0,SW,SH);
+  dockTop=document.querySelector('.dock').getBoundingClientRect().top;
   const m=map();
   if(frozen&&hi.width)og.drawImage(hi,m.dx,m.dy,m.fw*m.s,m.fh*m.s);
   for(const t of shown()){
-    const X=m.dx+t.x*m.fw*m.s,Y=m.dy+t.y*m.fh*m.s,r=Math.min(60,Math.max(16,Math.max(t.w*m.fw,t.h*m.fh)*m.s*1.7+6));
+    const X=m.dx+t.x*m.fw*m.s,Y=m.dy+t.y*m.fh*m.s,r=Math.min(80,Math.max(14,Math.max(t.w*m.fw,t.h*m.fh)*m.s*1.3+5));
     if(X<-r||Y<-r||X>SW+r||Y>SH+r)continue;
-    const a=Math.min(1,.45+t.hits*.14);
+    const a=Math.min(1,.35+t.hits*.12);
     og.globalAlpha=a;og.setLineDash([]);og.lineWidth=t.strong?7:5;og.strokeStyle='rgba(255,255,255,.95)';og.beginPath();og.arc(X,Y,r,0,7);og.stroke();
     og.setLineDash(t.strong?[]:[9,6]);og.lineWidth=t.strong?4.5:3;og.strokeStyle='#ff6a13';og.beginPath();og.arc(X,Y,r,0,7);og.stroke();
     og.globalAlpha=1;og.setLineDash([]);
   }
+  for(const t of tracks){if(!t.found||(!frozen&&t.hits<2))continue;const X=m.dx+t.x*m.fw*m.s,Y=m.dy+t.y*m.fh*m.s,r=Math.min(80,Math.max(14,Math.max(t.w*m.fw,t.h*m.fh)*m.s*1.3+5));
+    og.lineWidth=7;og.strokeStyle='rgba(255,255,255,.95)';og.beginPath();og.arc(X,Y,r,0,7);og.stroke();og.lineWidth=4.5;og.strokeStyle='#2ea05a';og.beginPath();og.arc(X,Y,r,0,7);og.stroke()}
   requestAnimationFrame(paint);
 }
 
@@ -328,7 +339,6 @@ function doResume(){
   if(!pending)loop();
 }
 frz.addEventListener('click',()=>{if(frozen)doResume();else doFreeze()});
-$('so').addEventListener('click',()=>{strongOnly=!strongOnly;$('so').setAttribute('aria-pressed',String(strongOnly));$('so').textContent=strongOnly?'All rings':'Best only'});
 bp.addEventListener('click',()=>{beep=!beep;bp.textContent=beep?'Beep on':'Beep off';bp.setAttribute('aria-pressed',String(beep));if(beep&&actx)actx.resume()});
 sens.addEventListener('change',()=>{tracks=[];if(frozen){if(pending)wantFreezeScan=true;else freezeScan()}});
 
@@ -341,9 +351,10 @@ save.addEventListener('click',async()=>{
 });
 $('svx').addEventListener('click',()=>{$('saved').hidden=true});
 
-function zoomAt(p,best){
+let zt=null;
+function zoomAt(p,best){zt=best||null;$('zbtns').hidden=!best;
   const src=hi.width?hi:fc,W=src.width,H=src.height;
-  const side=Math.max(Math.max(W,H)*.08,Math.max(p.w*W,p.h*H)*14),sx=p.x*W-side/2,sy=p.y*H-side/2;
+  const side=Math.max(Math.max(W,H)*.05,Math.max(p.w*W,p.h*H)*9),sx=p.x*W-side/2,sy=p.y*H-side/2;
   const x0=Math.max(0,sx),y0=Math.max(0,sy),x1=Math.min(W,sx+side),y1=Math.min(H,sy+side),k=720/side,zc=$('zc').getContext('2d');
   zc.fillStyle='#000';zc.fillRect(0,0,720,720);
   if(x1>x0&&y1>y0)zc.drawImage(src,x0,y0,x1-x0,y1-y0,(x0-sx)*k,(y0-sy)*k,(x1-x0)*k,(y1-y0)*k);
@@ -360,6 +371,17 @@ ov.addEventListener('click',e=>{
   zoomAt(p,best);
 });
 $('zx').addEventListener('click',()=>{$('zoom').hidden=true});
+let marks=[];
+function nearMark(p,kind){const now=Date.now();marks=marks.filter(k=>now-k.t<6000);const L=Math.max(fc.width,fc.height)||1;
+  return marks.some(k=>k.kind===kind&&Math.hypot((k.x-p.x)*fc.width,(k.y-p.y)*fc.height)<Math.max(.025*L,Math.max(k.w*fc.width,k.h*fc.height)*1.5))}
+function mark(kind){if(!zt)return;zt[kind]=true;marks.push({kind,x:zt.x,y:zt.y,w:zt.w,h:zt.h,t:Date.now()});for(const t of tracks)if(nearMark(t,kind))t[kind]=true;$('zoom').hidden=true;zt=null;if(frozen)frozenStatus()}
+function frozenStatus(){const n=shown().length;st.textContent=n?`Frozen · ${n} ring${n===1?'':'s'} · tap one to check it`:'Frozen · no more guesses here · tap Resume'}
+function todayKey(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()}
+function foundToday(){try{const o=JSON.parse(localStorage.getItem('stl-found')||'{}');return o.day===todayKey()?o.n|0:0}catch(e){return 0}}
+function showFound(){const n=foundToday();$('fd').hidden=!n;$('fd').textContent=`Found today: ${n}`}
+$('zno').addEventListener('click',()=>mark('skip'));
+$('zyes').addEventListener('click',()=>{const n=foundToday()+1;try{localStorage.setItem('stl-found',JSON.stringify({day:todayKey(),n}))}catch(e){}showFound();mark('found')});
+showFound();
 for(const id of['zoom','saved'])$(id).addEventListener('click',e=>{if(e.target.id===id)$(id).hidden=true});
 }
 </script>
