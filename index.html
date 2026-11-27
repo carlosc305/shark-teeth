@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b4f5c">
+<title>Shark Tooth Finder Live</title>
+<style>
+/* VOICE: a metal detector for teeth — glanceable in sun, one-thumb controls
+   IDEA: the camera is the sweep; rings settle on spots that stay put
+   PICTURE: full-screen live camera with orange rings
+   COLOUR and TYPE: sea teal chrome, safety-orange rings; system font for speed offline
+   LAYOUT: camera fills the screen, status chip on top, controls docked at the bottom */
+:root{--sea:#0b4f5c;--hot:#ff6a13;--ink:#fff}
+*{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:#000;color:var(--ink);font:16px/1.45 -apple-system,system-ui,sans-serif;overflow:hidden}
+#stage{position:fixed;inset:0}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#ov{position:absolute;inset:0;width:100%;height:100%;touch-action:manipulation}
+.top{position:absolute;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
+.chip{background:rgba(6,26,31,.78);border-radius:999px;padding:7px 12px;font-size:14px;font-weight:600}
+.chip.warn{background:rgba(255,106,19,.92);color:#1a0a00}
+.dock{position:absolute;left:0;right:0;bottom:0;padding:12px 14px calc(env(safe-area-inset-bottom) + 12px);background:linear-gradient(transparent,rgba(0,0,0,.75) 30%);display:grid;gap:10px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:10px}
+.btn{min-height:54px;border-radius:14px;border:2px solid rgba(255,255,255,.7);background:rgba(6,26,31,.6);color:#fff;font:700 17px/1.2 -apple-system,system-ui,sans-serif;cursor:pointer;padding:8px 12px}
+.btn.main{background:var(--hot);border-color:var(--hot);color:#1a0a00;font-size:19px}
+.btn[aria-pressed=true]{background:#fff;color:#0b4f5c;border-color:#fff}
+.btn:focus-visible,input:focus-visible{outline:3px solid #7fd3ff;outline-offset:2px}
+.sl{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
+.sl .btn{min-height:44px;font-size:15px;flex:none;padding:6px 14px}
+input[type=range]{flex:1;height:40px;accent-color:var(--hot)}
+#start{position:fixed;inset:0;background:var(--sea);display:grid;place-items:center;padding:calc(env(safe-area-inset-top) + 20px) 22px calc(env(safe-area-inset-bottom) + 20px);overflow:auto}
+#start .in{max-width:460px}
+h1{font:800 clamp(32px,9vw,46px)/1.05 -apple-system,system-ui,sans-serif;margin:0 0 12px;text-wrap:balance}
+#start p{color:#d4ecf0;margin:0 0 14px}
+#start svg{display:block;width:100%;max-width:300px;margin:0 auto 18px}
+#err{color:#ffd2b8;font-weight:600}
+.ov2{position:fixed;inset:0;background:rgba(0,0,0,.92);display:grid;place-items:center;padding:16px;z-index:9;overflow:auto}
+.zbox{width:min(92vw,520px)}
+#zc{display:block;width:100%;aspect-ratio:1;border-radius:12px;background:#000}
+#zl,#svl{margin:10px 0;font-weight:600}
+#svimg{display:block;width:100%;border-radius:12px}
+</style>
+</head>
+<body>
+<div id="stage">
+<video id="v" playsinline muted autoplay></video>
+<canvas id="ov" aria-label="Live camera with possible shark teeth circled. Tap to freeze and zoom."></canvas>
+<div class="top"><span class="chip" id="st">Starting…</span><span class="chip warn" id="busy" hidden>Speckled sand: expect extra rings</span></div>
+<div class="dock">
+<div class="row"><button class="btn main" id="frz" type="button">Freeze</button><button class="btn" id="save" type="button" hidden>Save photo</button><button class="btn" id="bp" type="button" aria-pressed="false">Beep off</button><button class="btn" id="so" type="button" aria-pressed="false">Best only</button></div>
+<div class="sl" id="zoomRow" hidden><span>Zoom</span><input id="zm" type="range" min="1" max="2" step=".1" value="1" aria-label="Camera zoom"><button class="btn" id="torch" type="button" hidden aria-pressed="false">Light</button></div>
+<div class="sl"><span>Fewer</span><input id="sens" type="range" min="1" max="10" value="5" aria-label="How many rings to show"><span>More</span></div>
+</div>
+</div>
+
+<div id="start"><div class="in">
+<svg viewBox="0 0 300 170" role="img" aria-label="A shark tooth with an orange ring around it">
+<rect width="300" height="170" rx="16" fill="#e8dbbf"/>
+<g fill="#a98f66"><circle cx="30" cy="30" r="2"/><circle cx="80" cy="140" r="2"/><circle cx="250" cy="40" r="2"/><circle cx="270" cy="130" r="2"/><circle cx="60" cy="90" r="1.5"/><circle cx="230" cy="100" r="1.5"/></g>
+<g transform="translate(150 88)"><path d="M-24 20q24-7 48 0l-2 5q-22-5-44 0z" fill="#5a4a3a"/><path d="M-20 18L0-28L20 18q-20-6-40 0z" fill="#1b1d1f"/><path d="M-5-11L0-24L3-13q-2 8-8 2z" fill="#fff" opacity=".35"/></g>
+<circle cx="150" cy="85" r="52" fill="none" stroke="#fff" stroke-width="8"/><circle cx="150" cy="85" r="52" fill="none" stroke="#ff6a13" stroke-width="5"/>
+</svg>
+<h1>Shark Tooth Finder Live</h1>
+<p>Point your camera at the sand and walk slowly. Orange rings settle on dark, solid spots that stay put. They're the phone's guesses: it catches some teeth but also rings shadows and gaps. Thick rings are its best guesses.</p>
+<p>Too many rings? Tap Best only. Hold the phone 2–3 feet up, sun behind you. Tap the screen or a ring to freeze and zoom. For a real answer, tap Save photo and run it through the Claude check in the Shark Tooth Finder in Claude.</p>
+<button class="btn main" id="go" type="button" style="width:100%">Start camera</button>
+<p id="err" role="alert"></p>
+</div></div>
+
+<div id="zoom" class="ov2" hidden role="dialog" aria-modal="true" aria-label="Zoomed spot">
+<div class="zbox"><canvas id="zc" width="720" height="720"></canvas><p id="zl"></p><button class="btn" id="zx" type="button" style="width:100%">Close</button></div>
+</div>
+<div id="saved" class="ov2" hidden role="dialog" aria-modal="true" aria-label="Save this photo">
+<div class="zbox"><img id="svimg" alt="The frozen camera frame"><p id="svl">Press and hold the photo, then tap Save to Photos. Open it in the Shark Tooth Finder in Claude with Pick from photos for a Claude check.</p><button class="btn" id="svx" type="button" style="width:100%">Close</button></div>
+</div>
+
+<script>
+{
+function detectTile(d,W,H,cx0,cy0,cx1,cy1,o,bgf,ox,oy){
+  const N=W*H,W1=W+1,L=new Float32Array(N),C=new Float32Array(N),P=new Float32Array(N);
+  for(let i=0,j=0;i<N;i++,j+=4){const r=d[j],g=d[j+1],b=d[j+2];L[i]=.299*r+.587*g+.114*b;C[i]=r-b;P[i]=g-(r+b)/2}
+  const SL=new Float64Array(W1*(H+1)),SL2=new Float64Array(W1*(H+1)),SC=new Float64Array(W1*(H+1));
+  for(let y=0;y<H;y++){let a=0,b=0,c=0;const o1=(y+1)*W1,p=y*W1,q=y*W;for(let x=0;x<W;x++){const v=L[q+x];a+=v;b+=v*v;c+=C[q+x];SL[o1+x+1]=SL[p+x+1]+a;SL2[o1+x+1]=SL2[p+x+1]+b;SC[o1+x+1]=SC[p+x+1]+c}}
+  const at=(S,x0,y0,x1,y1)=>S[y1*W1+x1]-S[y0*W1+x1]-S[y1*W1+x0]+S[y0*W1+x0];
+  const F=bgf.f,BW=bgf.bw,M=new Uint8Array(N),T=new Float32Array(N),L5=new Float32Array(N),BG=new Float32Array(N),BS=new Float32Array(N),BC=new Float32Array(N);
+  for(let y=2;y<H-2;y++){const brow=((oy+y)/F|0)*BW;for(let x=2;x<W-2;x++){
+    const i=y*W+x,m=at(SL,x-2,y-2,x+3,y+3)/25,v=at(SL2,x-2,y-2,x+3,y+3)/25-m*m,t=v>0?Math.sqrt(v):0;
+    T[i]=t;L5[i]=m;
+    if(t>=80)continue;
+    const bi=brow+((ox+x)/F|0),bg=bgf.L[bi],bs=bgf.S[bi],bc=bgf.C[bi];
+    const c5=at(SC,x-2,y-2,x+3,y+3)/25,gap=Math.max(o.gMin,.5*bs),dk=bg-m,wc=c5-bc;
+    if((dk>gap&&c5<85&&t<Math.max(o.tS,.3*dk))||(t<o.tS&&wc>o.cMin&&wc<90&&c5<110&&dk>.3*gap)){M[i]=1;BG[i]=bg;BS[i]=bs;BC[i]=bc}
+  }}
+  const lab=new Uint8Array(N),st=new Int32Array(N),px=new Int32Array(N),out=[];
+  for(let p=0;p<N;p++){
+    if(!M[p]||lab[p])continue;
+    let sp=0,np=0,spp=0;st[sp++]=p;lab[p]=1;let a=0,sx=0,sy=0,sxx=0,syy=0,sxy=0,sl=0,sb=0,ss=0,sc=0,sbc=0,st5=0,x0=W,x1=0,y0=H,y1=0;
+    while(sp){const q=st[--sp],x=q%W,y=(q-x)/W;px[np++]=q;spp+=P[q];a++;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;sl+=L5[q];sb+=BG[q];ss+=BS[q];st5+=T[q];sc+=at(SC,x-2,y-2,x+3,y+3)/25;sbc+=BC[q];
+      if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
+      if(x>0&&M[q-1]&&!lab[q-1]){lab[q-1]=1;st[sp++]=q-1}if(x<W-1&&M[q+1]&&!lab[q+1]){lab[q+1]=1;st[sp++]=q+1}
+      if(y>0&&M[q-W]&&!lab[q-W]){lab[q-W]=1;st[sp++]=q-W}if(y<H-1&&M[q+W]&&!lab[q+W]){lab[q+W]=1;st[sp++]=q+W}}
+    const mx=sx/a,my=sy/a;
+    if(mx<cx0||mx>=cx1||my<cy0||my>=cy1)continue;
+    if(a<o.minA||a>o.maxA)continue;
+    const vxx=sxx/a-mx*mx+1/12,vyy=syy/a-my*my+1/12,vxy=sxy/a-mx*my,tr=vxx+vyy,det=Math.max(vxx*vyy-vxy*vxy,1e-6),disc=Math.sqrt(Math.max(0,tr*tr/4-det)),el=Math.sqrt((tr/2+disc)/Math.max(1e-6,tr/2-disc));
+    if(el>7)continue;
+    let md=0;for(let k=0;k<np;k++){const q=px[k],qx=q%W,dx=qx-mx,dy=(q-qx)/W-my,dd=dx*dx+dy*dy;if(dd>md)md=dd}
+    const tri=(Math.sqrt(md)+.5)/Math.sqrt(a/Math.PI)/Math.sqrt(el),pt=tri>2.4?.4:tri<1.12?.75:1+.8*Math.min(.5,Math.max(0,tri-1.1));
+    const bs=Math.max(8,ss/a),dz=(sb-sl)/a/bs,cz=(sc-sbc)/a/Math.max(10,bs*.5),sm=Math.max(0,1-st5/a/Math.max(o.tS,.3*(sb-sl)/a));
+    const ca=sc/a,pm=spp/a,purple=pm<-6?Math.max(.2,1+(pm+6)/10):1,warm=ca>60?Math.max(.2,1-(ca-60)/40):1;
+    const lm=sl/a,ratio=lm/Math.max(1,sb/a),darkF=cz>1?1:Math.min(1,Math.max(.3,(.95-ratio)/.4));
+    const sq=el<1.2&&tri>1.15&&tri<1.33?.35:1;
+    const s=sq*Math.sqrt(Math.min(a,o.aCap)/o.aRef)*(.4+Math.max(0,dz)+.6*Math.max(0,cz))*(.45+.55*sm)*(el>4.5?.7:1)*purple*warm*pt*darkF*Math.min(1,Math.max(.1,(175-lm)/40));
+    out.push({x:mx,y:my,w:(x1-x0+5)/2,h:(y1-y0+5)/2,a,s,dz,cz,el,tri,c:sc/a});
+  }
+  return out;
+}
+function medianTexture(d,W,H){ // sample 5x5 std on a sparse grid
+  const v=[];const Lp=(x,y)=>{const j=(y*W+x)*4;return .299*d[j]+.587*d[j+1]+.114*d[j+2]};
+  for(let y=4;y<H-4;y+=9)for(let x=4;x<W-4;x+=9){let s=0,s2=0;for(let yy=-2;yy<=2;yy++)for(let xx=-2;xx<=2;xx++){const l=Lp(x+xx,y+yy);s+=l;s2+=l*l}const m=s/25;v.push(Math.sqrt(Math.max(0,s2/25-m*m)))}
+  v.sort((a,b)=>a-b);return v[v.length>>1]||0;
+}
+
+function bgField(getTile,W,H,R){
+  const f=Math.max(2,Math.round(Math.max(W,H)/500)),bw=Math.ceil(W/f),bh=Math.ceil(H/f),n=bw*bh,sL=new Float64Array(n),sL2=new Float64Array(n),sC=new Float64Array(n),cnt=new Float64Array(n),TS=512;
+  for(let ty=0;ty<H;ty+=TS)for(let tx=0;tx<W;tx+=TS){
+    const w=Math.min(TS,W-tx),h=Math.min(TS,H-ty),d=getTile(tx,ty,w,h);
+    for(let y=0;y<h;y++){const row=((ty+y)/f|0)*bw;for(let x=0;x<w;x++){const j=(y*w+x)*4,r=d[j],b=d[j+2],l=.299*r+.587*d[j+1]+.114*b,k=row+((tx+x)/f|0);sL[k]+=l;sL2[k]+=l*l;sC[k]+=r-b;cnt[k]++}}
+  }
+  const B1=bw+1,I=a=>{const S=new Float64Array(B1*(bh+1));for(let y=0;y<bh;y++){let s=0;for(let x=0;x<bw;x++){s+=a[y*bw+x];S[(y+1)*B1+x+1]=S[y*B1+x+1]+s}}return S};
+  const IL=I(sL),IL2=I(sL2),IC=I(sC),IN=I(cnt),rb=Math.max(2,Math.round(R/f)),L=new Float32Array(n),S=new Float32Array(n),C=new Float32Array(n);
+  const at=(S,x0,y0,x1,y1)=>S[y1*B1+x1]-S[y0*B1+x1]-S[y1*B1+x0]+S[y0*B1+x0];
+  for(let y=0;y<bh;y++){const y0=Math.max(0,y-rb),y1=Math.min(bh,y+rb+1);for(let x=0;x<bw;x++){const x0=Math.max(0,x-rb),x1=Math.min(bw,x+rb+1),c=at(IN,x0,y0,x1,y1)||1,m=at(IL,x0,y0,x1,y1)/c,v=at(IL2,x0,y0,x1,y1)/c-m*m,k=y*bw+x;L[k]=m;S[k]=v>0?Math.sqrt(v):0;C[k]=at(IC,x0,y0,x1,y1)/c}}
+  return {f,bw,bh,L,S,C};
+}
+function scanOpts(W,H,sens,tm){const LONG=Math.max(W,H);return {R:Math.round(LONG/14),tS:Math.max(5,tm*(.28+sens*.03)),gMin:18,cMin:14,minA:Math.max(3,Math.round((LONG/700)**2)),aRef:Math.max(1,(LONG/2000)**2),aCap:1e12,maxA:Math.round((LONG/15)**2)}}
+function pick(all,W,H,sens){
+  const LONG=Math.max(W,H),eb=Math.round(LONG*.035),keep=all.filter(c=>c.x>eb&&c.y>eb&&c.x<W-eb&&c.y<H-eb).sort((a,b)=>b.s-a.s);
+  const T=2.6-sens*.16,cap=[2,3,4,5,6,8,10,13,16,20][sens-1]||6,out=[];
+  for(const c of keep){
+    if(out.length>=cap||c.s<T)break;
+    if(out.some(p=>Math.hypot(p.x-c.x,p.y-c.y)<Math.max(p.w,p.h,c.w,c.h)*2))continue;
+    out.push(c);
+  }
+  const best=out.length?out[0].s:0;
+  return out.map(c=>({x:c.x/W,y:c.y/H,w:c.w/W,h:c.h/H,sc:c.s,strong:c.s>=Math.max(6,T*3,.7*best)}));
+}
+async function scanAll(getTile,W,H,sens,onProg){
+  const LONG=Math.max(W,H),TILE=1024,cw=Math.min(W,1200),ch=Math.min(H,1200),tm=medianTexture(getTile((W-cw)>>1,(H-ch)>>1,cw,ch),cw,ch);
+  const o=scanOpts(W,H,sens,tm),MG=Math.round(Math.sqrt(o.maxA)/2)+4,bg=bgField(getTile,W,H,o.R),all=[],tiles=[];
+  for(let ty=0;ty<H;ty+=TILE)for(let tx=0;tx<W;tx+=TILE)tiles.push([tx,ty]);
+  for(let k=0;k<tiles.length;k++){
+    const [tx,ty]=tiles[k],x0=Math.max(0,tx-MG),y0=Math.max(0,ty-MG),x1=Math.min(W,tx+TILE+MG),y1=Math.min(H,ty+TILE+MG);
+    for(const c of detectTile(getTile(x0,y0,x1-x0,y1-y0),x1-x0,y1-y0,tx-x0,ty-y0,Math.min(x1,tx+TILE)-x0,Math.min(y1,ty+TILE)-y0,o,bg,x0,y0)){c.x+=x0;c.y+=y0;all.push(c)}
+    if(onProg)await onProg((k+1)/tiles.length);
+  }
+  return {spots:pick(all,W,H,sens),tm};
+}
+function scanFrame(d,W,H,sens,tmIn){
+  const tm=tmIn>0?tmIn:medianTexture(d,W,H),o=scanOpts(W,H,sens,tm);
+  const get=(x,y,w,h)=>{if(x===0&&y===0&&w===W&&h===H)return d;const t=new Uint8ClampedArray(w*h*4);for(let r=0;r<h;r++)t.set(d.subarray(((y+r)*W+x)*4,((y+r)*W+x+w)*4),r*w*4);return t};
+  return {spots:pick(detectTile(d,W,H,0,0,W,H,o,bgField(get,W,H,o.R),0,0),W,H,sens),tm};
+}
+
+const $=id=>document.getElementById(id);
+const v=$('v'),ov=$('ov'),og=ov.getContext('2d'),st=$('st'),sens=$('sens'),frz=$('frz'),bp=$('bp'),save=$('save');
+const fc=document.createElement('canvas'),fg=fc.getContext('2d',{willReadFrequently:true});
+const hi=document.createElement('canvas'),hg=hi.getContext('2d');
+let painting=false,strongOnly=false,worker=null,pending=false,running=false,frozen=false,beep=false,actx=null,tracks=[],nextId=1,tm=0,frames=0,lastRate=performance.now(),rate=0,lock=null,stream=null,vtrack=null,seq=0,freezeId=-1,wantFreezeScan=false,shareFile=null,shareUrl=null,torchOn=false;
+
+const wsrc=[detectTile,medianTexture,bgField,scanOpts,pick,scanFrame].map(f=>f.toString()).join('\n')+
+ '\nlet tmS=0,tmN=0;onmessage=e=>{const m=e.data,d=new Uint8ClampedArray(m.buf);const r=scanFrame(d,m.W,m.H,m.sens,tmN%10?tmS:0);if(tmN%10===0)tmS=r.tm;tmN++;r.id=m.id;postMessage(r)}';
+try{worker=new Worker(URL.createObjectURL(new Blob([wsrc],{type:'text/javascript'})))}catch(e){worker=null}
+function scanLocal(m){const r=scanFrame(new Uint8ClampedArray(m.buf),m.W,m.H,m.sens,0);r.id=m.id;setTimeout(()=>onResult(r),0)}
+if(worker)worker.onmessage=e=>onResult(e.data);
+
+$('go').addEventListener('click',start);
+async function start(){
+  $('err').textContent='';
+  if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$('err').textContent='The camera needs this page opened from its https:// link in Safari.';return}
+  try{actx=new(window.AudioContext||window.webkitAudioContext)();actx.resume()}catch(e){actx=null}
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}}});
+  }catch(e){
+    $('err').textContent=e&&e.name==='NotAllowedError'?'Camera is blocked. If you opened this file inside another app (like Claude or Files), it can\'t use the camera: open its https:// link in Safari instead. Already in Safari? Tap aA, then Website Settings, set Camera to Allow, and try again.':"Couldn't start the camera. Close other camera apps and try again.";
+    return;
+  }
+  v.srcObject=stream;
+  try{await v.play()}catch(e){}
+  $('start').hidden=true;$('go').textContent='Start camera';running=true;st.textContent='Scanning…';
+  try{if(navigator.wakeLock)lock=await navigator.wakeLock.request('screen')}catch(e){}
+  setupControls();
+  resize();loop();if(!painting){painting=true;requestAnimationFrame(paint)}
+}
+function cameraLost(){
+  running=false;pending=false;tracks=[];
+  try{stream&&stream.getTracks().forEach(t=>t.stop())}catch(e){}
+  stream=null;frozen=false;frz.textContent='Freeze';frz.setAttribute('aria-pressed','false');save.hidden=true;
+  $('go').textContent='Restart camera';$('err').textContent='The camera stopped while you were away. Tap Restart camera.';$('start').hidden=false;
+}
+document.addEventListener('visibilitychange',async()=>{
+  if(document.hidden||!running)return;
+  const tr=stream&&stream.getVideoTracks()[0];
+  if(!tr||tr.readyState==='ended'){cameraLost();return}
+  if(!frozen&&v.paused)v.play().catch(()=>{});
+  if(navigator.wakeLock){try{lock=await navigator.wakeLock.request('screen')}catch(e){}}
+  if(!frozen&&!pending)loop();
+});
+
+function setupControls(){
+  vtrack=stream&&stream.getVideoTracks()[0];
+  let caps={};try{caps=vtrack&&vtrack.getCapabilities?vtrack.getCapabilities():{}}catch(e){}
+  const zm=$('zm');
+  if(caps.zoom&&caps.zoom.max>caps.zoom.min){
+    zm.min=caps.zoom.min;zm.max=Math.min(caps.zoom.max,10);zm.step=caps.zoom.step||.1;zm.value=caps.zoom.min;$('zoomRow').hidden=false;
+    zm.addEventListener('input',()=>{vtrack.applyConstraints({advanced:[{zoom:+zm.value}]}).catch(()=>{});tracks=[]});
+  }
+  if(caps.torch){
+    $('zoomRow').hidden=false;$('torch').hidden=false;
+    if(!caps.zoom)zm.hidden=true,zm.previousElementSibling.hidden=true;
+    $('torch').addEventListener('click',()=>{torchOn=!torchOn;$('torch').setAttribute('aria-pressed',String(torchOn));vtrack.applyConstraints({advanced:[{torch:torchOn}]}).catch(()=>{})});
+  }
+}
+
+function grab(){
+  const vw=v.videoWidth,vh=v.videoHeight;
+  if(!vw||!vh)return false;
+  const k=Math.min(1,1920/Math.max(vw,vh)),W=Math.round(vw*k),H=Math.round(vh*k);
+  if(fc.width!==W||fc.height!==H){fc.width=W;fc.height=H}
+  fg.drawImage(v,0,0,W,H);return true;
+}
+function post(){
+  const W=fc.width,H=fc.height,buf=fg.getImageData(0,0,W,H).data.buffer,m={buf,W,H,sens:+sens.value,id:++seq};
+  pending=true;
+  if(worker)worker.postMessage(m,[buf]);else scanLocal(m);
+  return m.id;
+}
+function loop(){
+  if(!running||frozen||pending)return;
+  if(document.hidden){setTimeout(loop,500);return}
+  const tr=stream&&stream.getVideoTracks()[0];if(tr&&tr.readyState==='ended'){cameraLost();return}
+  if(!grab()){setTimeout(loop,100);return}
+  post();
+}
+
+function onResult(r){
+  pending=false;
+  if(frozen){
+    if(r.id===freezeId){tracks=r.spots.map(p=>({id:nextId++,x:p.x,y:p.y,w:p.w,h:p.h,hits:4,miss:0,sc:p.sc,strong:p.strong,seen:true,beeped:true}));st.textContent=`Frozen · ${tracks.length} ring${tracks.length===1?'':'s'} · tap one to zoom`}
+    else if(wantFreezeScan){wantFreezeScan=false;freezeScan()}
+    return;
+  }
+  frames++;
+  const now=performance.now();if(now-lastRate>1000){rate=frames*1000/(now-lastRate);frames=0;lastRate=now}
+  tm=r.tm||tm;
+  $('busy').hidden=!(tm>22);
+  track(r.spots);
+  const ns=tracks.filter(t=>t.strong&&t.hits>=2).length;
+  st.textContent=`Live · ${rate?rate.toFixed(1):'…'} scans/s`;
+  setTimeout(loop,0);
+}
+
+function track(list){
+  const L=Math.max(fc.width,fc.height);
+  for(const t of tracks)t.seen=false;
+  for(const p of list){
+    let best=null,bd=1e9;
+    for(const t of tracks){if(t.seen)continue;const d=Math.hypot((t.x-p.x)*fc.width,(t.y-p.y)*fc.height);if(d<bd){bd=d;best=t}}
+    const lim=Math.max(.03*L,Math.max(p.w*fc.width,p.h*fc.height)*3);
+    if(best&&bd<lim){best.x+=(p.x-best.x)*.6;best.y+=(p.y-best.y)*.6;best.w=p.w;best.h=p.h;best.hits++;best.miss=0;best.sc=Math.max(best.sc*.8,p.sc);best.strong=best.strong||p.strong&&best.hits>=3;best.seen=true}
+    else tracks.push({id:nextId++,x:p.x,y:p.y,w:p.w,h:p.h,hits:1,miss:0,sc:p.sc,strong:false,seen:true,beeped:false});
+  }
+  for(const t of tracks)if(!t.seen)t.miss++;
+  tracks=tracks.filter(t=>t.miss<=2).slice(-60);
+  for(const t of tracks)if(t.strong&&t.hits>=3&&!t.beeped){t.beeped=true;ping()}
+}
+
+function ping(){
+  if(!beep||!actx)return;
+  try{const o=actx.createOscillator(),g=actx.createGain(),t=actx.currentTime;o.frequency.value=1046;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.35,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+.18);o.connect(g).connect(actx.destination);o.start(t);o.stop(t+.2)}catch(e){}
+}
+
+let SW=0,SH=0,dpr=1;
+function resize(){dpr=Math.min(3,window.devicePixelRatio||1);SW=innerWidth;SH=innerHeight;ov.width=Math.round(SW*dpr);ov.height=Math.round(SH*dpr)}
+addEventListener('resize',resize);
+function map(){const fw=fc.width||1,fh=fc.height||1,s=Math.max(SW/fw,SH/fh);return{s,dx:(SW-fw*s)/2,dy:(SH-fh*s)/2,fw,fh}}
+
+function shown(){return tracks.filter(t=>t.hits>=2&&(!strongOnly||t.strong))}
+function paint(){
+  if(!running){painting=false;return}
+  og.setTransform(dpr,0,0,dpr,0,0);og.clearRect(0,0,SW,SH);
+  const m=map();
+  if(frozen&&hi.width)og.drawImage(hi,m.dx,m.dy,m.fw*m.s,m.fh*m.s);
+  for(const t of shown()){
+    const X=m.dx+t.x*m.fw*m.s,Y=m.dy+t.y*m.fh*m.s,r=Math.min(60,Math.max(16,Math.max(t.w*m.fw,t.h*m.fh)*m.s*1.7+6));
+    if(X<-r||Y<-r||X>SW+r||Y>SH+r)continue;
+    const a=Math.min(1,.45+t.hits*.14);
+    og.globalAlpha=a;og.setLineDash([]);og.lineWidth=t.strong?7:5;og.strokeStyle='rgba(255,255,255,.95)';og.beginPath();og.arc(X,Y,r,0,7);og.stroke();
+    og.setLineDash(t.strong?[]:[9,6]);og.lineWidth=t.strong?4.5:3;og.strokeStyle='#ff6a13';og.beginPath();og.arc(X,Y,r,0,7);og.stroke();
+    og.globalAlpha=1;og.setLineDash([]);
+  }
+  requestAnimationFrame(paint);
+}
+
+function freezeScan(){
+  const k=Math.min(1,1920/Math.max(hi.width,hi.height)),W=Math.round(hi.width*k),H=Math.round(hi.height*k);
+  if(fc.width!==W||fc.height!==H){fc.width=W;fc.height=H}
+  fg.drawImage(hi,0,0,W,H);freezeId=post();
+}
+function doFreeze(){
+  if(!running||frozen)return;
+  const vw=v.videoWidth,vh=v.videoHeight;if(!vw)return;
+  frozen=true;v.pause();
+  hi.width=vw;hi.height=vh;hg.drawImage(v,0,0,vw,vh);
+  frz.textContent='Resume';frz.setAttribute('aria-pressed','true');save.hidden=false;
+  st.textContent='Frozen · checking this frame…';
+  shareFile=null;if(shareUrl){URL.revokeObjectURL(shareUrl);shareUrl=null}
+  hi.toBlob(b=>{if(b&&frozen){shareFile=new File([b],`sand-${Date.now()}.jpg`,{type:'image/jpeg'});shareUrl=URL.createObjectURL(b)}},'image/jpeg',.92);
+  if(pending)wantFreezeScan=true;else freezeScan();
+}
+function doResume(){
+  frozen=false;wantFreezeScan=false;freezeId=-1;tracks=[];
+  frz.textContent='Freeze';frz.setAttribute('aria-pressed','false');save.hidden=true;
+  v.play().catch(()=>{});st.textContent='Scanning…';
+  if(!pending)loop();
+}
+frz.addEventListener('click',()=>{if(frozen)doResume();else doFreeze()});
+$('so').addEventListener('click',()=>{strongOnly=!strongOnly;$('so').setAttribute('aria-pressed',String(strongOnly));$('so').textContent=strongOnly?'All rings':'Best only'});
+bp.addEventListener('click',()=>{beep=!beep;bp.textContent=beep?'Beep on':'Beep off';bp.setAttribute('aria-pressed',String(beep));if(beep&&actx)actx.resume()});
+sens.addEventListener('change',()=>{tracks=[];if(frozen){if(pending)wantFreezeScan=true;else freezeScan()}});
+
+save.addEventListener('click',async()=>{
+  if(!shareFile){st.textContent='Getting the photo ready… tap Save again.';return}
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[shareFile]})){await navigator.share({files:[shareFile]});return}
+  }catch(e){if(e&&e.name==='AbortError')return}
+  $('svimg').src=shareUrl;$('saved').hidden=false;
+});
+$('svx').addEventListener('click',()=>{$('saved').hidden=true});
+
+function zoomAt(p,best){
+  const src=hi.width?hi:fc,W=src.width,H=src.height;
+  const side=Math.max(Math.max(W,H)*.08,Math.max(p.w*W,p.h*H)*14),sx=p.x*W-side/2,sy=p.y*H-side/2;
+  const x0=Math.max(0,sx),y0=Math.max(0,sy),x1=Math.min(W,sx+side),y1=Math.min(H,sy+side),k=720/side,zc=$('zc').getContext('2d');
+  zc.fillStyle='#000';zc.fillRect(0,0,720,720);
+  if(x1>x0&&y1>y0)zc.drawImage(src,x0,y0,x1-x0,y1-y0,(x0-sx)*k,(y0-sy)*k,(x1-x0)*k,(y1-y0)*k);
+  if(best){zc.strokeStyle='#ff6a13';zc.lineWidth=4;zc.setLineDash([12,8]);zc.beginPath();zc.arc(360,360,Math.max(50,Math.max(p.w*W,p.h*H)*k*1.6),0,7);zc.stroke();zc.setLineDash([])}
+  $('zl').textContent=(best?(best.strong?"One of the scan's best guesses.":'Possible spot.'):'Zoomed in where you tapped.')+' Blue-gray or black, a point and a wider root = tooth. Ridges, pores or a cupped shape = shell.';
+  $('zoom').hidden=false;
+}
+ov.addEventListener('click',e=>{
+  if(!running)return;
+  const m=map();let best=null,bd=48;
+  for(const t of shown()){const d=Math.hypot(m.dx+t.x*m.fw*m.s-e.clientX,m.dy+t.y*m.fh*m.s-e.clientY);if(d<bd){bd=d;best=t}}
+  const p=best?{...best}:{x:(e.clientX-m.dx)/(m.fw*m.s),y:(e.clientY-m.dy)/(m.fh*m.s),w:.01,h:.01};
+  if(!frozen){doFreeze();if(!best)return}
+  zoomAt(p,best);
+});
+$('zx').addEventListener('click',()=>{$('zoom').hidden=true});
+for(const id of['zoom','saved'])$(id).addEventListener('click',e=>{if(e.target.id===id)$(id).hidden=true});
+}
+</script>
+</body>
+</html>
